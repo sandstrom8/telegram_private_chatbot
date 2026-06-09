@@ -628,9 +628,9 @@ async function handleAdminReply(msg, env, ctx) {
   // 普通单条消息回复散客
   const res = await tgCall(env, "copyMessage", { chat_id: userId, from_chat_id: env.SUPERGROUP_ID, message_id: msg.message_id });
   
-  // 【新增补齐】管理员发给用户，原消息亮起 🦅 大拇指
+  // 【新增补齐】管理员发给用户，原消息亮起 🐳 大拇指
   if (res.ok) {
-      await sendSuccessReaction(env, env.SUPERGROUP_ID, msg.message_id, "🦅");
+      await sendSuccessReaction(env, env.SUPERGROUP_ID, msg.message_id, "🐳");
   }
 }
 
