@@ -31,23 +31,67 @@ const topicCreateInFlight = new Map();
 // 管理员权限缓存
 const adminStatusCache = new Map();
 
-// --- 本地题库 (15条) ---
+// --- 本地题库 (50条扩充版：零延迟、防死锁、极速响应) ---
 const LOCAL_QUESTIONS = [
+    // 基础数学
+    {"question": "1 加 1 等于几？", "correct_answer": "2", "incorrect_answers": ["1", "3", "0"]},
+    {"question": "5 减 3 等于几？", "correct_answer": "2", "incorrect_answers": ["1", "3", "4"]},
+    {"question": "2 乘以 4 等于几？", "correct_answer": "8", "incorrect_answers": ["6", "10", "4"]},
+    {"question": "10 除以 2 等于几？", "correct_answer": "5", "incorrect_answers": ["4", "2", "8"]},
+    {"question": "3 加 4 等于几？", "correct_answer": "7", "incorrect_answers": ["6", "8", "9"]},
+    {"question": "9 减 4 等于几？", "correct_answer": "5", "incorrect_answers": ["4", "6", "3"]},
+    {"question": "5 乘以 5 等于几？", "correct_answer": "25", "incorrect_answers": ["20", "30", "15"]},
+    {"question": "10 加 10 等于几？", "correct_answer": "20", "incorrect_answers": ["10", "100", "0"]},
+    
+    // 自然常识
     {"question": "冰融化后会变成什么？", "correct_answer": "水", "incorrect_answers": ["石头", "木头", "火"]},
-    {"question": "正常人有几只眼睛？", "correct_answer": "2", "incorrect_answers": ["1", "3", "4"]},
-    {"question": "以下哪个属于水果？", "correct_answer": "香蕉", "incorrect_answers": ["白菜", "猪肉", "大米"]},
-    {"question": "1 加 2 等于几？", "correct_answer": "3", "incorrect_answers": ["2", "4", "5"]},
-    {"question": "5 减 2 等于几？", "correct_answer": "3", "incorrect_answers": ["1", "2", "4"]},
-    {"question": "2 乘以 3 等于几？", "correct_answer": "6", "incorrect_answers": ["4", "5", "7"]},
-    {"question": "10 加 5 等于几？", "correct_answer": "15", "incorrect_answers": ["10", "12", "20"]},
-    {"question": "8 减 4 等于几？", "correct_answer": "4", "incorrect_answers": ["2", "3", "5"]},
-    {"question": "在天上飞的交通工具是什么？", "correct_answer": "飞机", "incorrect_answers": ["汽车", "轮船", "自行车"]},
-    {"question": "星期一的后面是星期几？", "correct_answer": "星期二", "incorrect_answers": ["星期日", "星期五", "星期三"]},
-    {"question": "鱼通常生活在哪里？", "correct_answer": "水里", "incorrect_answers": ["树上", "土里", "火里"]},
-    {"question": "我们用什么器官来听声音？", "correct_answer": "耳朵", "incorrect_answers": ["眼睛", "鼻子", "嘴巴"]},
+    {"question": "水沸腾时会产生什么？", "correct_answer": "水蒸气", "incorrect_answers": ["冰块", "泥土", "火焰"]},
     {"question": "晴朗的天空通常是什么颜色的？", "correct_answer": "蓝色", "incorrect_answers": ["绿色", "红色", "紫色"]},
     {"question": "太阳从哪个方向升起？", "correct_answer": "东方", "incorrect_answers": ["西方", "南方", "北方"]},
-    {"question": "小狗发出的叫声通常是？", "correct_answer": "汪汪", "incorrect_answers": ["喵喵", "咩咩", "呱呱"]}
+    {"question": "太阳从哪个方向落下？", "correct_answer": "西方", "incorrect_answers": ["东方", "南方", "北方"]},
+    {"question": "植物生长主要需要水分和什么？", "correct_answer": "阳光", "incorrect_answers": ["汽油", "塑料", "黄金"]},
+    {"question": "一年有几个季节？", "correct_answer": "4个", "incorrect_answers": ["2个", "6个", "12个"]},
+    {"question": "下雨天我们通常需要打什么？", "correct_answer": "雨伞", "incorrect_answers": ["手电筒", "扇子", "领带"]},
+    
+    // 动物常识
+    {"question": "小狗发出的叫声通常是？", "correct_answer": "汪汪", "incorrect_answers": ["喵喵", "咩咩", "呱呱"]},
+    {"question": "小猫发出的叫声通常是？", "correct_answer": "喵喵", "incorrect_answers": ["汪汪", "哞哞", "叽叽"]},
+    {"question": "鱼通常生活在哪里？", "correct_answer": "水里", "incorrect_answers": ["树上", "土里", "火里"]},
+    {"question": "哪种动物的脖子特别长？", "correct_answer": "长颈鹿", "incorrect_answers": ["大象", "兔子", "老虎"]},
+    {"question": "大象最显著的特征是有长长的什么？", "correct_answer": "鼻子", "incorrect_answers": ["尾巴", "耳朵", "爪子"]},
+    {"question": "企鹅主要生活在非常冷还是非常热的地方？", "correct_answer": "非常冷", "incorrect_answers": ["非常热", "温水里", "沙漠里"]},
+    {"question": "能在天上飞的动物通常长有什么？", "correct_answer": "翅膀", "incorrect_answers": ["鳃", "鳞片", "犄角"]},
+    {"question": "蜜蜂通常会采什么来酿蜜？", "correct_answer": "花蜜", "incorrect_answers": ["树叶", "泥土", "石头"]},
+    {"question": "青蛙在变成青蛙之前叫什么？", "correct_answer": "蝌蚪", "incorrect_answers": ["毛毛虫", "蚕宝宝", "小鱼"]},
+    {"question": "晚上会发光的小飞虫叫什么？", "correct_answer": "萤火虫", "incorrect_answers": ["苍蝇", "蚊子", "蝴蝶"]},
+
+    // 时间与生活常识
+    {"question": "一天有多少个小时？", "correct_answer": "24小时", "incorrect_answers": ["12小时", "48小时", "100小时"]},
+    {"question": "一小时有多少分钟？", "correct_answer": "60分钟", "incorrect_answers": ["30分钟", "100分钟", "24分钟"]},
+    {"question": "一年有几个月？", "correct_answer": "12个", "incorrect_answers": ["10个", "365个", "4个"]},
+    {"question": "星期一的后面是星期几？", "correct_answer": "星期二", "incorrect_answers": ["星期日", "星期五", "星期三"]},
+    {"question": "正常人有几只眼睛？", "correct_answer": "2只", "incorrect_answers": ["1只", "3只", "4只"]},
+    {"question": "我们用什么器官来听声音？", "correct_answer": "耳朵", "incorrect_answers": ["眼睛", "鼻子", "嘴巴"]},
+    {"question": "我们用什么器官来看东西？", "correct_answer": "眼睛", "incorrect_answers": ["耳朵", "鼻子", "嘴巴"]},
+    {"question": "我们用什么器官来闻气味？", "correct_answer": "鼻子", "incorrect_answers": ["眼睛", "耳朵", "嘴巴"]},
+    {"question": "红绿灯中，什么颜色代表“停止”？", "correct_answer": "红色", "incorrect_answers": ["绿色", "黄色", "蓝色"]},
+    {"question": "红绿灯中，什么颜色代表“通行”？", "correct_answer": "绿色", "incorrect_answers": ["红色", "黄色", "黑色"]},
+
+    // 物品分类常识
+    {"question": "以下哪个属于水果？", "correct_answer": "香蕉", "incorrect_answers": ["白菜", "猪肉", "大米"]},
+    {"question": "以下哪个属于交通工具？", "correct_answer": "汽车", "incorrect_answers": ["苹果", "电视", "铅笔"]},
+    {"question": "以下哪个是用来写字的？", "correct_answer": "笔", "incorrect_answers": ["勺子", "梳子", "筷子"]},
+    {"question": "以下哪个是用来吃饭的？", "correct_answer": "筷子", "incorrect_answers": ["毛笔", "梳子", "扫把"]},
+    {"question": "以下哪个属于电器？", "correct_answer": "电视机", "incorrect_answers": ["木桌", "石头", "皮鞋"]},
+    {"question": "书主要是由什么材质做的？", "correct_answer": "纸张", "incorrect_answers": ["钢铁", "玻璃", "泥土"]},
+    {"question": "衣服穿脏了通常需要用什么洗？", "correct_answer": "洗衣机/洗衣液", "incorrect_answers": ["冰箱", "微波炉", "洗碗机"]},
+    {"question": "切菜通常需要使用什么工具？", "correct_answer": "菜刀", "incorrect_answers": ["锤子", "剪刀", "扳手"]},
+    {"question": "用来遮挡阳光保护眼睛的眼镜叫什么？", "correct_answer": "墨镜", "incorrect_answers": ["老花镜", "近视镜", "放大镜"]},
+    {"question": "睡觉时通常垫在头下的物品叫什么？", "correct_answer": "枕头", "incorrect_answers": ["被子", "床单", "地毯"]},
+    {"question": "以下哪种材料通常是透明的？", "correct_answer": "玻璃", "incorrect_answers": ["木板", "砖头", "铁板"]},
+    {"question": "用来测量温度的仪器叫什么？", "correct_answer": "温度计", "incorrect_answers": ["尺子", "指南针", "天平"]},
+    {"question": "哪种乐器通常有黑白相间的琴键？", "correct_answer": "钢琴", "incorrect_answers": ["吉他", "小提琴", "鼓"]},
+    {"question": "刷牙时除了牙刷还需要什么？", "correct_answer": "牙膏", "incorrect_answers": ["洗发水", "沐浴露", "洗面奶"]}
 ];
 
 // --- 辅助工具函数 ---
