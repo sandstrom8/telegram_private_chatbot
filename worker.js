@@ -1,4 +1,4 @@
-// Cloudflare Worker：Telegram 双向机器人 v5.6 (原生星光动画回执版)
+// Cloudflare Worker：Telegram 双向机器人 v5.7 (双向动画回执版)
 
 // --- 配置常量 ---
 const CONFIG = {
@@ -26,9 +26,9 @@ const CONFIG = {
 
 // 线程健康检查缓存，减少频繁探测请求
 const threadHealthCache = new Map();
-// 同一实例内的并发保护：避免同一用户短时间内重复创建话题
+// 同一实例内的并发保护
 const topicCreateInFlight = new Map();
-// 管理员权限缓存（实例内）
+// 管理员权限缓存
 const adminStatusCache = new Map();
 
 // --- 本地题库 (15条) ---
@@ -80,7 +80,6 @@ async function safeGetJSON(env, key, defaultValue = null) {
         if (typeof data !== 'object') { Logger.warn('kv_invalid_type', { key, type: typeof data }); return defaultValue; }
         return data;
     } catch (e) {
-        Logger.error('kv_parse_failed', e, { key });
         return defaultValue;
     }
 }
@@ -148,7 +147,6 @@ async function probeForumThread(env, expectedThreadId, { userId, reason, doubleC
     if (first.status !== "missing_thread_id" || !doubleCheckOnMissingThreadId) return first;
 
     const second = await attemptOnce();
-    if (second.status === "missing_thread_id") Logger.warn('thread_probe_missing_thread_id', { userId, expectedThreadId, reason });
     return second;
 }
 
@@ -162,7 +160,6 @@ async function resetUserVerificationAndRequireReverify(env, { userId, userKey, o
         await env.TOPIC_MAP.delete(`thread_ok:${oldThreadId}`);
         threadHealthCache.delete(oldThreadId);
     }
-    Logger.info('verification_reset_due_to_topic_loss', { userId, oldThreadId, pendingMsgId, reason });
     await sendVerificationChallenge(userId, env, pendingMsgId || null);
 }
 
@@ -204,7 +201,6 @@ async function isAdminUser(env, userId) {
         adminStatusCache.set(cacheKey, { ts: now, isAdmin });
         return isAdmin;
     } catch (e) {
-        Logger.warn('admin_check_failed', { userId });
         return false;
     }
 }
@@ -239,18 +235,16 @@ async function checkRateLimit(userId, env, action = 'message', limit = 20, windo
     return { allowed: true, remaining: limit - count - 1 };
 }
 
-// 【重新设计的绝美原生反馈】
-// 调用 Telegram 原生表态接口，在消息右下角挂载动物/星光图标和头像
-async function sendSuccessReaction(env, chatId, messageId) {
+// 【动态表态反馈】支持传入自定义表情，区分用户和管理员
+async function sendSuccessReaction(env, chatId, messageId, emojiIcon = "🦄") {
     try {
         await tgCall(env, "setMessageReaction", {
             chat_id: chatId,
             message_id: messageId,
-            // 如果你想换别的标准动画，可以把这里的 "🦄" 换成 "🐳", "✨", "🔥" 或 "🎉" 等
-            reaction: [{ type: "emoji", emoji: "🦄" }] 
+            reaction: [{ type: "emoji", emoji: emojiIcon }] 
         });
     } catch (e) {
-        // 如果用户的 Telegram 客户端过老不支持表态，直接静默跳过，不阻断主流程
+        // 如果客户端过老不支持，静默跳过
     }
 }
 
@@ -295,7 +289,6 @@ export default {
         await handlePrivateMessage(msg, normalizedEnv, ctx);
       } catch (e) {
         await tgCall(normalizedEnv, "sendMessage", { chat_id: msg.chat.id, text: `⚠️ 系统繁忙，请稍后再试。` });
-        Logger.error('private_message_failed', e, { userId: msg.chat.id });
       }
       return new Response("OK");
     }
@@ -347,7 +340,6 @@ async function handlePrivateMessage(msg, env, ctx) {
     return;
   }
 
-  // 针对已验证用户的 /start 发送中文欢迎词及提示
   if (isStart) {
       const welcomeText = `👋 **欢迎使用 Sandstorm 专属传话筒**\n\n您已通过验证，现在可以自由与我对话。我会将您的消息原封不动地转达给管理员。\n\n💡 **使用说明：**\n• 直接发送文本、图片、视频或文件即可。\n• 请文明用语，耐心等待回复。\n• 消息送达后右下角会闪烁 🦄 星光图标提示。`;
       await tgCall(env, "sendMessage", {
@@ -413,8 +405,6 @@ async function forwardToTopic(msg, userId, key, env, ctx) {
                 } else if (probe.status === "probe_invalid") {
                     threadHealthCache.set(cacheKey, { ts: now, ok: true });
                     await env.TOPIC_MAP.put(kvHealthKey, "1", { expirationTtl: Math.ceil(CONFIG.THREAD_HEALTH_TTL_MS / 1000) });
-                } else if (probe.status === "unknown_error") {
-                    Logger.warn('topic_test_failed_unknown', { userId, threadId: rec.thread_id, errorDescription: probe.description });
                 } else {
                     await env.TOPIC_MAP.delete(retryKey);
                     threadHealthCache.set(cacheKey, { ts: now, ok: true });
@@ -477,8 +467,8 @@ async function forwardToTopic(msg, userId, key, env, ctx) {
         });
     }
 
-    // 【动画表态送达提示】右下角亮起独角兽/星光与机器人小头像
-    await sendSuccessReaction(env, userId, msg.message_id);
+    // 【新增补齐】用户发送给群组，亮起独角兽 🦄
+    await sendSuccessReaction(env, userId, msg.message_id, "🦄");
 }
 
 async function handleAdminReply(msg, env, ctx) {
@@ -590,7 +580,14 @@ async function handleAdminReply(msg, env, ctx) {
     await handleMediaGroup(msg, env, ctx, { direction: "t2p", targetChat: userId, threadId: undefined });
     return;
   }
-  await tgCall(env, "copyMessage", { chat_id: userId, from_chat_id: env.SUPERGROUP_ID, message_id: msg.message_id });
+  
+  // 普通单条消息回复散客
+  const res = await tgCall(env, "copyMessage", { chat_id: userId, from_chat_id: env.SUPERGROUP_ID, message_id: msg.message_id });
+  
+  // 【新增补齐】管理员发给用户，原消息亮起 👍 大拇指
+  if (res.ok) {
+      await sendSuccessReaction(env, env.SUPERGROUP_ID, msg.message_id, "👍");
+  }
 }
 
 // ---------------- 验证模块 (纯本地) ----------------
@@ -886,8 +883,11 @@ async function handleMediaGroup(msg, env, ctx, { direction, targetChat, threadId
     const key = `mg:${direction}:${groupId}`;
     const item = extractMedia(msg);
     if (!item) {
-        await tgCall(env, "copyMessage", withMessageThreadId({ chat_id: targetChat, from_chat_id: msg.chat.id, message_id: msg.message_id }, threadId));
-        if (direction === "p2t") await sendSuccessReaction(env, msg.chat.id, msg.message_id);
+        const res = await tgCall(env, "copyMessage", withMessageThreadId({ chat_id: targetChat, from_chat_id: msg.chat.id, message_id: msg.message_id }, threadId));
+        if (res.ok) {
+            // 【新增补齐】区分单向反馈的表情
+            await sendSuccessReaction(env, msg.chat.id, msg.message_id, direction === "p2t" ? "🦄" : "👍");
+        }
         return;
     }
     let rec = await safeGetJSON(env, key, null);
@@ -936,11 +936,12 @@ async function delaySend(env, key, ts) {
         if (media.length > 0) {
             try {
                 const result = await tgCall(env, "sendMediaGroup", withMessageThreadId({ chat_id: rec.targetChat, media }, rec.threadId));
-                if (result.ok && rec.direction === "p2t" && rec.items.length > 0) {
-                    await sendSuccessReaction(env, rec.sourceChatId, rec.items[0].msg_id);
+                if (result.ok && rec.items.length > 0) {
+                    // 【新增补齐】为相册提供回执，同样区分正反向
+                    await sendSuccessReaction(env, rec.sourceChatId, rec.items[0].msg_id, rec.direction === "p2t" ? "🦄" : "👍");
                 }
             } catch (e) {}
         }
         await env.TOPIC_MAP.delete(key);
     }
-                                   }
+}
